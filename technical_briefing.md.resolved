@@ -1,0 +1,445 @@
+# Technical Briefing: Interactive Population & Reach Map Application
+
+## Project Overview
+
+Build an interactive web application that visualizes German postal code (PLZ) areas on a map, allowing users to select regions and calculate advertising reach based on population data, demographics, and topic interests.
+
+---
+
+## Core Functionality
+
+### 1. Map Visualization
+
+**Requirements:**
+- Display all German PLZ areas as interactive polygons on a dark-themed map
+- Use GeoJSON data for postal code boundaries
+- Support click-to-select on map polygons
+- Show all PLZ areas by default (not just selected ones)
+- Visual distinction between selected and unselected areas
+- Smooth zoom animations when selecting areas
+- Auto-select all Berlin PLZ areas on initial load
+
+**Technical Details:**
+- Map library: React Leaflet
+- Tile layer: CartoDB Dark Matter theme
+- GeoJSON data split into shards (0-9) for performance
+- Initial load: PLZ starting with 1 (Berlin area)
+- Progressive loading: Remaining shards load in background
+
+### 2. Data Structure
+
+**PLZ Mapping Data:**
+Each PLZ area contains:
+- `plz`: 5-digit postal code
+- `ort`: City/town name
+- `einwohner`: Population count
+- `smart_tv_potential`: 25% of population (base reach)
+- `demographics`: Object with demographic breakdowns
+- `landkreis`: District
+- `bundesland`: Federal state
+
+**Demographic Categories (% of total population):**
+- Erw. 16+: 85.39%
+- Erw. 18+: 83.5%
+- Erw. 18-29: 13.63%
+- Erw. 20-39: 24.61%
+- Erw. 18-49: 38.84%
+- Erw. 20-59: 53.02%
+- Erw. 30-49: 25.21%
+- Erw. 30-59: 41.38%
+- Erw. 50+: 44.71%
+- Erw. 60+: 28.54%
+- Frauen 18-29: 6.52%
+- Frauen 20-39: 11.91%
+- Frauen 18-49: 18.95%
+- Frauen 30-49: 12.43%
+- Frauen 30-59: 20.47%
+- Männer 18-29: 7.11%
+- Männer 20-39: 12.70%
+- Männer 18-49: 19.89%
+- Männer 30-49: 12.79%
+- Männer 30-59: 20.91%
+
+### 3. Selection & Aggregation
+
+**City-Level Grouping:**
+- Aggregate individual PLZ areas by city name (`ort`)
+- Allow selection/deselection of entire cities at once
+- Display city-level statistics (total population, total reach, PLZ count)
+
+**Multi-Selection:**
+- Support selecting multiple cities/PLZ areas simultaneously
+- Toggle selection on click (select if not selected, deselect if selected)
+- "Clear All" functionality to deselect everything
+
+**Data Aggregation:**
+- Sum population across selected areas
+- Sum reach (smart_tv_potential) across selected areas
+- Aggregate demographic data for selected areas
+
+### 4. Filtering System
+
+**Demographic Filters:**
+- Radio-button style selection (only one active at a time)
+- "All" option to show total population
+- When active: adjust displayed population and reach to match demographic segment
+- Apply 25% reach multiplier to demographic population
+
+**Topic Filters (Themenumfelder):**
+- 11 topic categories, each reaching 20% of population:
+  - Auto
+  - Beauty & Fashion
+  - Wirtschaft, Finanzen & News
+  - Food
+  - Gesundheit
+  - Lifestyle
+  - Living
+  - Entertainment
+  - Reise
+  - Sport
+  - Technik
+- Radio-button style selection
+- When active: multiply reach by 0.20 (20%)
+- Can combine with demographic filters
+
+**Filter Combination Logic:**
+```
+Base Reach = sum of smart_tv_potential for selected areas
+
+If demographic filter active:
+  Reach = sum of (demographic_value * 0.25) for selected areas
+
+If topic filter active:
+  Reach = Reach * 0.20
+
+Total Impressions = Reach * Frequency Multiplier
+```
+
+### 5. Frequency Multiplier
+
+**Requirements:**
+- Slider control: 1x to 10x
+- Default: 3x
+- Multiplies unique reach to calculate total impressions
+- Formula: `Total Impressions = Unique Reach × Frequency`
+
+### 6. Search Functionality
+
+**Requirements:**
+- Search by city name (partial match, case-insensitive)
+- Search by PLZ code (exact or partial match)
+- Filter displayed cities in real-time
+- Hide demographic and topic filters when search is active
+
+### 7. Statistics Display
+
+**Selected Items Panel:**
+- Show when cities are selected
+- Display selected cities as removable chips
+- Show aggregated statistics:
+  - Unique Devices (reach)
+  - Total Impressions (reach × frequency)
+- Display active filters (demographic and/or topic)
+- Include frequency slider
+
+**City List:**
+- Display all German cities sorted by population (descending)
+- Show for each city:
+  - City name
+  - Number of PLZ areas
+  - Population
+  - Reach potential
+- Visual indicator for selected cities
+
+---
+
+## Technical Stack
+
+### Required Technologies
+
+**Frontend Framework:**
+- React (with hooks)
+- Vite for build tooling
+
+**Map Library:**
+- React Leaflet
+- Leaflet.js
+
+**Styling:**
+- Tailwind CSS
+- Dark theme (black/zinc color palette)
+
+**Animations:**
+- Framer Motion (optional, for smooth transitions)
+
+**Icons:**
+- Lucide React
+
+### Data Files Required
+
+**CSV Files:**
+1. [plz-5stellig-daten.csv](file:///Users/volkanaktas/.gemini/antigravity/scratch/population_map/public/data/plz-5stellig-daten.csv)
+   - Columns: plz, note, einwohner, qkm, lat, lon
+   - Population data for each PLZ
+
+2. [zuordnung_plz_ort.csv](file:///Users/volkanaktas/.gemini/antigravity/scratch/population_map/public/data/zuordnung_plz_ort.csv)
+   - Columns: osm_id, ags, ort, plz, landkreis, bundesland
+   - Maps PLZ to city/location names
+
+**GeoJSON Files:**
+- `plz_0.json` through `plz_9.json`
+- Split by first digit of PLZ
+- Each contains FeatureCollection with PLZ polygons
+
+### File Structure
+
+```
+src/
+├── components/
+│   ├── MapArea.jsx          # Map container & controls
+│   ├── Sidebar.jsx          # Main sidebar with filters & list
+│   └── SelectedItemsPanel.jsx # Selected cities display
+├── utils/
+│   └── dataLoader.js        # CSV parsing & GeoJSON loading
+├── styles/
+│   └── index.css           # Tailwind + custom styles
+└── App.jsx                 # Main app component
+
+public/
+└── data/
+    ├── plz-5stellig-daten.csv
+    ├── zuordnung_plz_ort.csv
+    └── shards/
+        ├── plz_0.json
+        ├── plz_1.json
+        └── ... (through plz_9.json)
+```
+
+---
+
+## Key Implementation Details
+
+### Data Loading Strategy
+
+**Initial Load (Fast):**
+1. Load CSV files (mapping & population data)
+2. Parse and create lookup object: `{ [plz]: { einwohner, demographics, ort, ... } }`
+3. Load only `plz_1.json` (Berlin area)
+4. Enrich GeoJSON features with mapping data
+5. Display map immediately
+
+**Progressive Load (Background):**
+1. Load remaining shards (plz_0, plz_2-9) sequentially
+2. Enrich each shard with mapping data
+3. Append to displayed data
+4. 100ms delay between shards to prevent UI blocking
+
+### State Management
+
+**App-Level State:**
+- `selectedZones`: Array of selected GeoJSON features
+- `searchTerm`: String for filtering cities
+- `demographicFilter`: String (demographic key) or null
+- `topicFilter`: String (topic name) or null
+- `frequencyMultiplier`: Number (1-10)
+
+**Derived State (useMemo):**
+- City grouping (aggregate PLZ by city)
+- Filtered cities (apply search)
+- Total reach calculation (apply filters & frequency)
+- Available demographics (extract from loaded data)
+
+### Reach Calculation Logic
+
+```javascript
+// Base reach
+let uniqueReach = 0;
+
+if (demographicFilter) {
+  // Use demographic-specific reach
+  uniqueReach = selectedZones.reduce((sum, zone) => {
+    const demographicValue = zone.properties.demographics?.[demographicFilter] || 0;
+    return sum + Math.round(demographicValue * 0.25);
+  }, 0);
+} else {
+  // Use total smart_tv_potential
+  uniqueReach = selectedZones.reduce((sum, zone) => 
+    sum + (zone.properties.smart_tv_potential || 0), 0
+  );
+}
+
+// Apply topic filter
+if (topicFilter) {
+  uniqueReach = Math.round(uniqueReach * 0.20);
+}
+
+// Calculate impressions
+const totalImpressions = uniqueReach * frequencyMultiplier;
+```
+
+### Map Interaction
+
+**Selection Behavior:**
+- Click on map polygon → toggle selection
+- Click on city in sidebar → select/deselect all PLZ in that city
+- Clicking selected city → deselect all its PLZ areas
+
+**Zoom Behavior:**
+- No selection: Show full Germany (center: [51.1657, 10.4515], zoom: 6)
+- Single city: Zoom to fit that city's bounds
+- Multiple cities: Zoom to fit all selected areas
+- Use `flyTo` and `flyToBounds` for smooth animations
+
+**Visual Styling:**
+- Selected areas: Higher opacity, thicker border, white border color
+- Unselected areas: Low opacity, thin border, green color
+- Hover: Slightly increased opacity and border weight
+
+---
+
+## Business Rules
+
+### Smart TV Reach
+- Base assumption: 25% of population has Smart TV
+- Formula: `smart_tv_potential = Math.round(population * 0.25)`
+
+### Demographic Filtering
+- When demographic filter is active, use demographic-specific population
+- Apply same 25% reach multiplier to demographic population
+- Example: If "Erw. 18-29" is 13.63% of 100,000 = 13,630 people
+  - Reach = 13,630 × 0.25 = 3,408 devices
+
+### Topic Filtering
+- Each topic reaches exactly 20% of the base reach
+- 5 topics would cover 100% (5 × 20%)
+- Applied AFTER demographic filtering
+- Example: 10,000 devices × 0.20 (Sport) = 2,000 devices
+
+### Frequency Multiplier
+- Represents how many times an ad is shown per device
+- Range: 1x (show once) to 10x (show ten times)
+- Only affects impressions, not unique reach
+- Example: 1,000 devices × 3x frequency = 3,000 impressions
+
+---
+
+## Performance Considerations
+
+### Optimization Strategies
+
+1. **Data Sharding**: Split GeoJSON into 10 files by PLZ prefix
+2. **Progressive Loading**: Load Berlin first, rest in background
+3. **Lazy Rendering**: Only render visible map features
+4. **Memoization**: Use `useMemo` for expensive calculations
+5. **Debouncing**: Debounce search input (optional)
+
+### Expected Data Volumes
+- Total PLZ areas: ~8,000-9,000
+- GeoJSON file sizes: ~500KB-2MB per shard
+- CSV files: <1MB each
+- Initial load: ~1-2 seconds
+- Full load: ~5-10 seconds
+
+---
+
+## Error Handling
+
+### Required Error States
+
+1. **Data Loading Failures**
+   - Display error message if CSV or GeoJSON fails to load
+   - Provide fallback to empty state
+   - Log errors to console
+
+2. **Invalid Data**
+   - Check for missing required fields
+   - Skip invalid entries
+   - Continue with valid data
+
+3. **Map Rendering Issues**
+   - Catch GeoJSON parsing errors
+   - Handle invalid bounds gracefully
+   - Show loading state during data fetch
+
+---
+
+## Testing Scenarios
+
+### Functional Tests
+
+1. **Selection**
+   - Click map area → area selected
+   - Click city in list → all PLZ selected
+   - Click selected city → all PLZ deselected
+   - Clear all → no areas selected
+
+2. **Filtering**
+   - Select demographic → numbers update
+   - Select topic → reach reduced to 20%
+   - Combine filters → both applied correctly
+   - Clear filters → back to total population
+
+3. **Search**
+   - Search city name → filtered list
+   - Search PLZ → matching cities shown
+   - Clear search → full list restored
+
+4. **Calculations**
+   - Verify reach = population × 0.25
+   - Verify demographic reach uses correct %
+   - Verify topic filter applies 20%
+   - Verify frequency multiplier affects impressions only
+
+### Edge Cases
+
+1. City with single PLZ
+2. City with 50+ PLZ areas (Berlin)
+3. Very small population (<100)
+4. No demographic data available
+5. All cities selected
+6. Rapid filter switching
+
+---
+
+## Acceptance Criteria
+
+### Must Have
+- ✅ Display all German PLZ areas on map
+- ✅ Click to select/deselect areas
+- ✅ Group by city in sidebar
+- ✅ Multi-selection support
+- ✅ Demographic filters (21 options)
+- ✅ Topic filters (11 options)
+- ✅ Frequency slider (1-10x)
+- ✅ Search by city/PLZ
+- ✅ Correct reach calculations
+- ✅ Smooth map animations
+- ✅ Auto-select Berlin on load
+- ✅ Dark theme UI
+
+### Should Have
+- Responsive design (desktop-first)
+- Tooltips on map hover
+- Loading states
+- Error messages
+- Performance optimization
+
+### Nice to Have
+- Export selected data
+- Save/load selections
+- Share link with selections
+- Print view
+- Light theme toggle
+
+---
+
+## Notes for Implementation
+
+1. **Start with data loading**: Get CSV parsing and GeoJSON loading working first
+2. **Build map next**: Display areas before adding selection logic
+3. **Add selection**: Implement click handlers and state management
+4. **Implement filters**: Add demographic and topic filtering
+5. **Build UI**: Create sidebar and statistics panels
+6. **Polish**: Add animations, loading states, error handling
+
+The UI design will be provided separately via mockups. Focus on functionality and data accuracy first, then apply the provided design system.

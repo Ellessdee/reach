@@ -1,0 +1,320 @@
+# AI Agent Prompt: Build Interactive Population & Reach Map
+
+## Your Task
+
+Build a React web application that visualizes German postal code (PLZ) areas on an interactive map, allowing users to plan and save advertising campaigns across different cities with demographic and topic targeting.
+
+## Project Goal
+
+Create a campaign planning tool for media planners to:
+1. Plan advertising campaigns by selecting cities/postal codes on a map
+2. See aggregated population and reach statistics
+3. Filter by demographics (age groups, gender) and topics
+4. Save, manage, and compare multiple campaigns
+5. Calculate total impressions with frequency multipliers
+6. Access campaigns from anywhere (web-hosted)
+
+## Core Requirements
+
+### Map Functionality
+- Display all ~8,000 German PLZ areas as **clickable but invisible by default**
+- **IMPORTANT**: Only show PLZ shape outline on **mouse hover** (not all shapes at once)
+- This prevents screen overload while keeping all areas interactive
+- Dark map theme (CartoDB Dark Matter)
+- Multi-selection support (click to toggle)
+- **Smart initial load**: Auto-detect user's location (city-level) and load that area first
+  - If geolocation unavailable or fails, fallback to Berlin
+  - Use browser's Geolocation API (city-level accuracy is sufficient)
+  - Load detected city's shard first, then progressively load others
+- Smooth zoom animations when selecting areas
+- Selected areas show filled shapes with borders
+
+### Data & Calculations
+- **Base Reach**: 25% of population has Smart TV
+- **Demographics**: 21 age/gender segments (e.g., "Erw. 18+", "Frauen 20-39")
+- **Topics**: 11 categories, each reaches 20% of base (Auto, Beauty, Sport, Food, etc.)
+- **Frequency**: 1x-10x multiplier (default 3x)
+- **Formula**: `Impressions = Unique Reach × Frequency × Topic Filter × Demographic Filter`
+
+### Features Required
+✅ City-level grouping (aggregate PLZ by city name)
+✅ Search by city name or PLZ code
+✅ Demographic filters (radio buttons, one active)
+✅ Topic filters (radio buttons, one active)
+✅ Frequency slider (1-10x)
+✅ Display selected cities as removable chips
+✅ Show aggregated statistics (devices, impressions)
+✅ Clear all selections button
+✅ **Campaign Management System** (NEW - Critical Feature)
+
+### Campaign Planning System
+
+**Core Concept:**
+Users plan campaigns (e.g., "Week 52 Campaign"), save them, and return later to modify, compare, or book.
+
+**Required Features:**
+
+1. **Campaign Creation**
+   - Create new campaign with name (e.g., "Christmas Week 52")
+   - Each campaign stores:
+     - Selected cities/PLZ areas
+     - Active demographic filter
+     - Active topic filter
+     - Frequency multiplier
+     - Creation date
+     - Last modified date
+
+2. **Campaign Management**
+   - List all saved campaigns
+   - Switch between campaigns (load saved selections)
+   - Edit campaign (modify selections/filters)
+   - Duplicate campaign (copy as starting point)
+   - Delete campaign
+   - Compare campaigns side-by-side (optional)
+
+3. **Campaign Storage**
+   - Use browser LocalStorage for persistence
+   - Export/Import campaigns as JSON (for backup/sharing)
+   - Auto-save on changes (debounced)
+
+4. **UI Integration Options** (Choose one):
+   - **Option A**: Right sidebar for campaigns list
+   - **Option B**: "Campaigns" tab in left sidebar (toggle with main view)
+   - **Option C**: Dropdown/modal for campaign selection
+   - Recommendation: Right sidebar keeps main workflow uninterrupted
+
+5. **Campaign Workflow**
+   ```
+   User Flow:
+   1. Create "Week 52 Campaign"
+   2. Select cities, apply filters
+   3. Auto-saves selections
+   4. Create "Week 1 Campaign"
+   5. Select different cities
+   6. Switch back to "Week 52" → selections reload
+   7. Modify and save
+   8. Export both campaigns for client review
+   ```
+
+**Data Structure:**
+```javascript
+{
+  id: "uuid",
+  name: "Christmas Week 52",
+  selectedPLZs: ["10115", "10117", ...],
+  demographicFilter: "Erw. 18-29",
+  topicFilter: "Beauty & Fashion",
+  frequencyMultiplier: 5,
+  createdAt: "2024-12-07T10:00:00Z",
+  updatedAt: "2024-12-07T15:30:00Z",
+  stats: {
+    uniqueReach: 125000,
+    totalImpressions: 625000,
+    citiesCount: 5
+  }
+}
+```
+
+## Technical Constraints
+
+**Must Use:**
+- React with hooks (Vite build tool)
+- React Leaflet for maps
+- Tailwind CSS for styling
+- Dark theme (black/zinc palette)
+
+**Data Files Provided:**
+- [plz-5stellig-daten.csv](file:///Users/volkanaktas/.gemini/antigravity/scratch/population_map/public/data/plz-5stellig-daten.csv) - Population data per PLZ
+- [zuordnung_plz_ort.csv](file:///Users/volkanaktas/.gemini/antigravity/scratch/population_map/public/data/zuordnung_plz_ort.csv) - PLZ to city mapping
+- `plz_0.json` through `plz_9.json` - GeoJSON boundaries (split by first digit)
+
+**Performance:**
+- Load Berlin area (plz_1.json) first for instant display
+- Load remaining shards progressively in background
+- Use memoization for expensive calculations
+
+## Data Structure
+
+Each PLZ area must have:
+```javascript
+{
+  plz: "10115",
+  ort: "Berlin",
+  einwohner: 15234,
+  smart_tv_potential: 3809, // 25% of einwohner
+  demographics: {
+    "Erw. 18+": 12720,      // 83.5% of einwohner
+    "Erw. 18-29": 2076,     // 13.63% of einwohner
+    "Frauen 20-39": 1814,   // 11.91% of einwohner
+    // ... (see technical briefing for all 21 categories)
+  },
+  landkreis: "...",
+  bundesland: "..."
+}
+```
+
+## Key Business Logic
+
+### Reach Calculation
+```javascript
+// Step 1: Base reach
+let reach = sum of smart_tv_potential for selected PLZs
+
+// Step 2: Apply demographic filter (if active)
+if (demographicFilter) {
+  reach = sum of (demographic_value × 0.25) for selected PLZs
+}
+
+// Step 3: Apply topic filter (if active)
+if (topicFilter) {
+  reach = reach × 0.20
+}
+
+// Step 4: Calculate impressions
+impressions = reach × frequencyMultiplier
+```
+
+### Selection Behavior
+- Click map polygon → toggle that PLZ
+- Click city in sidebar → toggle all PLZs in that city
+- "Clear All" → deselect everything
+
+## UI Requirements (Functional, Not Visual)
+
+**Sidebar Must Have:**
+- Search input (filters city list)
+- Demographic filter pills (21 options + "All")
+- Topic filter pills (11 options + "All")
+- City list (sorted by population, descending)
+- Selected items panel (when cities selected)
+- Frequency slider (when cities selected)
+
+**Map Must Have:**
+- Visual distinction between selected/unselected areas
+- Hover tooltips showing PLZ, city, population
+- Zoom to fit selected areas
+- Smooth animations
+
+**Statistics Display:**
+- Unique Devices (reach count)
+- Total Impressions (reach × frequency)
+- Active filter badges
+- Selected city chips (removable)
+
+## Important Notes
+
+1. **UI Design**: You will receive mockups separately. Focus on functionality first.
+2. **Data Accuracy**: All percentages and calculations must match the technical briefing exactly.
+3. **Performance**: App must load Berlin instantly, full data within 10 seconds.
+4. **Error Handling**: Gracefully handle missing data, failed loads, invalid bounds.
+
+## Deliverables
+
+1. Working React application
+2. All data loading and parsing logic
+3. Correct reach calculations with all filters
+4. Smooth map interactions
+5. Clean, maintainable code
+
+## Reference Documentation
+
+**CRITICAL**: Read the complete technical briefing ([technical_briefing.md](file:///Users/volkanaktas/.gemini/antigravity/brain/c165eea7-4773-4787-925b-fffb13b9c214/technical_briefing.md)) for:
+- Exact demographic percentages (21 categories)
+- Detailed calculation formulas with examples
+- State management patterns
+- File structure requirements
+- Testing scenarios
+- Edge cases
+
+The technical briefing contains ALL implementation details. This prompt is a high-level overview.
+
+---
+
+## Deployment & Hosting
+
+**Requirement**: App must be accessible from the internet (not just localhost).
+
+### Recommended Options
+
+**Option 1: GitHub Pages (Easiest for Testing)**
+- ✅ Free hosting
+- ✅ Automatic deployment via GitHub Actions
+- ✅ Custom domain support
+- ✅ HTTPS by default
+- ⚠️ Public repository required (or GitHub Pro for private)
+
+**Setup:**
+```bash
+# In package.json, add:
+"homepage": "https://yourusername.github.io/population-map",
+"scripts": {
+  "predeploy": "npm run build",
+  "deploy": "gh-pages -d dist"
+}
+
+# Deploy:
+npm install --save-dev gh-pages
+npm run deploy
+```
+
+**Option 2: Hostinger (Production-Ready)**
+- ✅ Full control over hosting
+- ✅ Custom domain included
+- ✅ Better for client-facing production
+- ⚠️ Requires manual upload or CI/CD setup
+
+**Setup:**
+```bash
+# Build for production
+npm run build
+
+# Upload 'dist' folder to Hostinger via:
+# - FTP/SFTP
+# - File Manager in hPanel
+# - Git deployment (if available)
+```
+
+**Hostinger Deployment Steps:**
+1. Build: `npm run build`
+2. Upload `dist/*` to `public_html/` (or subdirectory)
+3. Ensure `.htaccess` for SPA routing:
+   ```apache
+   <IfModule mod_rewrite.c>
+     RewriteEngine On
+     RewriteBase /
+     RewriteRule ^index\.html$ - [L]
+     RewriteCond %{REQUEST_FILENAME} !-f
+     RewriteCond %{REQUEST_FILENAME} !-d
+     RewriteRule . /index.html [L]
+   </IfModule>
+   ```
+
+### Recommendation
+- **For Development/Testing**: Use GitHub Pages (faster iteration)
+- **For Production/Client Demo**: Use Hostinger (more professional)
+- **Best Practice**: Set up both - GitHub Pages for testing, Hostinger for production
+
+### Performance Considerations for Hosting
+- Ensure all data files (`plz_*.json`, CSVs) are in `public/data/`
+- Enable gzip compression on server
+- Consider CDN for GeoJSON files if performance issues arise
+- Monitor initial load time (should be <3 seconds)
+
+---
+
+## Getting Started
+
+1. Read [technical_briefing.md](file:///Users/volkanaktas/.gemini/antigravity/brain/c165eea7-4773-4787-925b-fffb13b9c214/technical_briefing.md) thoroughly
+2. Set up React + Vite project with required dependencies
+3. Implement data loading (CSV parsing + GeoJSON)
+4. Build map with hover-only shape rendering
+5. Add geolocation for smart initial load
+6. Implement campaign management system
+7. Add filtering system
+8. Create statistics calculations
+9. Build UI components (using provided mockups)
+10. Test all scenarios from technical briefing
+11. Deploy to GitHub Pages for testing
+12. Deploy to Hostinger for production
+
+**Questions?** Refer to the technical briefing first. It covers 99% of implementation details.
